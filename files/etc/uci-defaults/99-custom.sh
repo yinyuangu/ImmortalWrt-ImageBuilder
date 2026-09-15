@@ -80,7 +80,7 @@ elif [ "$count" -gt 1 ]; then
     uci set network.wan6.proto='dhcpv6'
 
     # 查找 br-lan 设备 section
-    section=$(uci show network | awk -F '[.=]' '/\.@?device\[\d+\]\.name=.br-lan.$/ {print $2; exit}')
+    section=$(uci show network | sed -n "s/^network\.\(.*\)\.name='br-lan'$/\1/p" | head -n 1)
     if [ -z "$section" ]; then
         echo "error：cannot find device 'br-lan'." >>$LOGFILE
     else
