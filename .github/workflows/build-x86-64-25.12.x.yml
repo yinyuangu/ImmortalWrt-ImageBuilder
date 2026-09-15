@@ -13,7 +13,7 @@ on:
       custom_router_ip:
         description: "请设置路由器的管理地址(仅对多网口路由器有效) 格式:192.168.x.1 或 10.x.x.1"
         required: true
-        default: "192.168.100.1"
+        default: "192.168.2.1"
       profile:
         description: '选择软件包空间大小'
         required: true
@@ -63,6 +63,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Prepare requested third-party APKs
+        env:
+          LUCI_VERSION: ${{ inputs.luci_version }}
+        run: |
+          test "$LUCI_VERSION" = "25.12.1" || { echo 'This custom profile requires 25.12.1'; exit 1; }
+          python3 x86-64/prepare-custom25.py
+          cp x86-64/custom25-packages.txt shell/custom25-packages.txt
+
+      - name: Build TurboACC and Chinese translations with the matching SDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison gawk gettext git libncurses-dev libssl-dev python3 python3-setuptools rsync swig unzip zlib1g-dev zstd file wget
+          bash x86-64/build-custom25-luci.sh
 
       - name: Set executable permissions
         run: chmod +x ${{ github.workspace }}/x86-64/build25.sh
@@ -121,6 +135,9 @@ jobs:
             -v "${{ github.workspace }}/x86-64/imm25.config:/home/build/immortalwrt/.config" \
             -v "${{ github.workspace }}/shell:/home/build/immortalwrt/shell" \
             -v "${{ github.workspace }}/x86-64/build25.sh:/home/build/immortalwrt/build.sh" \
+            -v "${{ github.workspace }}/custom25-apks:/custom25-apks:ro" \
+            -v "${{ github.workspace }}/x86-64/custom25-firstboot:/custom25-firstboot:ro" \
+            -e CUSTOM25_PROFILE=1 \
             -e PROFILE=$ROOTFS_SIZE \
             -e INCLUDE_DOCKER=$include_docker \
             -e ENABLE_PPPOE=${{ inputs.enable_pppoe }} \
@@ -128,6 +145,16 @@ jobs:
             -e PPPOE_PASSWORD=${{ inputs.pppoe_password }} \
           immortalwrt/imagebuilder:x86-64-openwrt-${luci_version} /bin/bash /home/build/immortalwrt/build.sh
           
+
+      - name: Upload package manifest and source records
+        uses: actions/upload-artifact@v4
+        with:
+          name: custom25-package-evidence
+          path: |
+            bin/targets/x86/64/*.manifest
+            custom25-sources.json
+            x86-64/custom25-packages.txt
+          if-no-files-found: error
 
       - name: Create info
         run: |
@@ -140,6 +167,12 @@ jobs:
           - 🏠 **后台地址**: ${{ github.event.inputs.custom_router_ip }}
           - 👤 **用户名**: root
           - 🔑 **密码**: 无
+          - 固件版本: 25.12.1 / x86-64 EFI / SquashFS
+          - 软件包空间: ${{ github.event.inputs.profile }}
+          - 插件: AdGuard Home、Lucky、TurboACC、MosDNS、Argon、DiskMan、WireGuard、Partexp、OpenClash、Daed
+          - 已包含中文界面和匹配官方内核的依赖；OpenClash 已预装 Mihomo 与 GeoIP/GeoSite。
+          - AdGuard Home、MosDNS、OpenClash、Daed 默认关闭，配置后按需启用。
+          - TurboACC 包含软件分载、Full Cone、BBR 支持；分载默认关闭以便配置代理。
           EOF
 
           if [ "${{ github.event.inputs.include_docker }}" == "yes" ]; then
@@ -156,6 +189,8 @@ jobs:
           body_path: ${{ github.workspace }}/router-info.md
           files: |
             ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz
+            ${{ github.workspace }}/bin/targets/x86/64/*.manifest
+            ${{ github.workspace }}/custom25-sources.json
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
