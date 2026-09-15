@@ -9,15 +9,22 @@ mkdir -p sdk
 tar --zstd -xf sdk.tar.zst -C sdk --strip-components=1
 cd sdk
 # Pin the LuCI source to the version inspected when preparing this profile.
-printf '%s\n' 'src-git luci https://github.com/immortalwrt/luci.git^d6167ea0645cbd1327708d85f94824f42d0eb872' > feeds.conf
-./scripts/feeds update luci
-./scripts/feeds install -a -p luci
+cp feeds.conf.default feeds.conf
+sed -i '/^src-git.* luci /d' feeds.conf
+printf '%s\n' 'src-git luci https://github.com/immortalwrt/luci.git^d6167ea0645cbd1327708d85f94824f42d0eb872' >> feeds.conf
+./scripts/feeds update -a
+./scripts/feeds install -a
+# Lua and ucode headers are needed by the indirect lucihttp build.
+test -e package/feeds/packages/lua/Makefile
+test -e package/feeds/base/ucode/Makefile || test -e package/system/ucode/Makefile
 git clone --depth 1 --branch luci https://github.com/chenmozhijin/turboacc.git turboacc-src
 git -C turboacc-src fetch --depth 1 origin 530092c532839efb96e9f328d34dbf3adff4b557
 git -C turboacc-src checkout 530092c532839efb96e9f328d34dbf3adff4b557
 cp -a turboacc-src/luci-app-turboacc package/
 mkdir -p feeds/luci/applications/luci-app-adguardhome/po/zh_Hans
 cp "$ROOT/x86-64/adguardhome.zh_Hans.po" feeds/luci/applications/luci-app-adguardhome/po/zh_Hans/adguardhome.po
+# Clear SDK-wide package selections, then select only these LuCI builds.
+sed -i '/^CONFIG_PACKAGE_.*=[my]$/d' .config
 cat >> .config <<'EOF'
 CONFIG_ALL=n
 CONFIG_ALL_KMODS=n
