@@ -145,6 +145,9 @@ if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
     package=${package%%=*}
     grep -q "^${package} - " "$manifest" || { echo "Missing requested package: $package"; exit 1; }
   done < shell/custom25-packages.txt
+  if grep -Eq '^(daed|daed-geoip|daed-geosite|luci-app-daed|luci-i18n-daed-zh-cn|kmod-sched-bpf|kmod-xdp-sockets-diag) - ' "$manifest"; then
+    echo "Unexpected removed Daed package or dedicated dependency"; exit 1
+  fi
   test -x files/usr/bin/lucky
   grep -Fxq 'luci-app-adguardhome - 3.3.0-r1' "$manifest"
   grep -Fxq 'luci-i18n-adguardhome-zh-cn - 3.3.0-r1' "$manifest"

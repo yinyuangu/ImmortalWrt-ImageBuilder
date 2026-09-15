@@ -40,12 +40,4 @@ unzip
 ruby
 ruby-yaml
 dnsmasq-full
-luci-app-daed
-luci-i18n-daed-zh-cn
-daed
-daed-geoip
-daed-geosite
-kmod-sched-core
-kmod-sched-bpf
-kmod-xdp-sockets-diag
 kmod-veth
