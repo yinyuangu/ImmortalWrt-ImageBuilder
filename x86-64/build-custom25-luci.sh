@@ -15,8 +15,8 @@ printf '%s\n' 'src-git luci https://github.com/immortalwrt/luci.git^d6167ea0645c
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 # Lua and ucode headers are needed by the indirect lucihttp build.
-test -e package/feeds/packages/lua/Makefile
-test -e package/feeds/base/ucode/Makefile || test -e package/system/ucode/Makefile
+test -e package/feeds/base/lua/Makefile
+test -e package/feeds/base/ucode/Makefile || test -e package/utils/ucode/Makefile
 git clone --depth 1 --branch luci https://github.com/chenmozhijin/turboacc.git turboacc-src
 git -C turboacc-src fetch --depth 1 origin 530092c532839efb96e9f328d34dbf3adff4b557
 git -C turboacc-src checkout 530092c532839efb96e9f328d34dbf3adff4b557
