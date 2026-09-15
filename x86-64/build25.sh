@@ -1,7 +1,12 @@
 #!/bin/bash
+set -eo pipefail
 # Log file for debugging
 # 目前支持少部分第三方软件apk 通过打开shell/apk-custom-packages.sh的注释来集成
-source shell/apk-custom-packages.sh
+if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
+  CUSTOM_PACKAGES="$(tr '\n' ' ' < shell/custom25-packages.txt)"
+else
+  source shell/apk-custom-packages.sh
+fi
 echo "第三方apk软件包: $CUSTOM_PACKAGES"
 LOGFILE="/tmp/uci-defaults-log.txt"
 echo "Starting 99-custom.sh at $(date)" >> $LOGFILE
@@ -21,7 +26,10 @@ EOF
 echo "cat pppoe-settings"
 cat /home/build/immortalwrt/files/etc/config/pppoe-settings
 
-if [ -z "$CUSTOM_PACKAGES" ]; then
+if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
+  mkdir -p packages
+  cp /custom25-apks/*.apk packages/
+elif [ -z "$CUSTOM_PACKAGES" ]; then
   echo "⚪️ 未选择 任何第三方软件包"
 else
   # ============= 同步第三方插件库==============
@@ -82,12 +90,14 @@ if echo "$PACKAGES" | grep -q "luci-app-openclash"; then
     wget -q https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat -O files/etc/openclash/GeoIP.dat
     wget -q https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat -O files/etc/openclash/GeoSite.dat
     # Download latest openclash Client
-    URL=$(curl -s https://api.github.com/repos/vernesong/OpenClash/releases/latest \
+    if [ "${CUSTOM25_PROFILE:-0}" != "1" ]; then
+    URL=$(curl -fsS https://api.github.com/repos/vernesong/OpenClash/releases/latest \
       | grep "browser_download_url.*apk" \
       | head -n1 \
       | cut -d '"' -f 4)
     echo "OpenClash latest apk: $URL"
     wget "$URL" -P /home/build/immortalwrt/packages/
+    fi
 else
     echo "⚪️ 未选择 luci-app-openclash"
 fi
@@ -106,6 +116,12 @@ else
     echo "⚪️ 未选择 luci-app-ssr-plus"
 fi
 
+# Keep DNS/proxy services opt-in: no subscription or filtering policy was supplied.
+if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
+  cp /custom25-firstboot files/etc/uci-defaults/zz-custom25
+  chmod +x files/etc/uci-defaults/zz-custom25
+fi
+
 # 构建镜像
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Building image with the following packages:"
 echo "$PACKAGES"
@@ -118,3 +134,22 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Build completed successfully."
+
+if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
+  manifest=bin/targets/x86/64/immortalwrt-25.12.1-x86-64-generic.manifest
+  test -s "$manifest"
+  while read -r package; do
+    grep -q "^${package} - " "$manifest" || { echo "Missing requested package: $package"; exit 1; }
+  done < shell/custom25-packages.txt
+  if [ "$INCLUDE_DOCKER" = yes ]; then
+    for package in dockerd luci-app-dockerman luci-i18n-dockerman-zh-cn; do
+      grep -q "^${package} - " "$manifest" || exit 1
+    done
+  fi
+  test -s files/etc/openclash/core/clash_meta
+  test -s files/etc/openclash/GeoIP.dat
+  test -s files/etc/openclash/GeoSite.dat
+  if find packages -maxdepth 1 \( -name 'kmod-*.apk' -o -name 'vmlinux-btf-*.apk' \) | grep -q .; then
+    echo "Refusing external kernel/BTF packages"; exit 1
+  fi
+fi
