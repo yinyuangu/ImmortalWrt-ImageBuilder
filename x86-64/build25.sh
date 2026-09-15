@@ -4,6 +4,13 @@ set -eo pipefail
 # 目前支持少部分第三方软件apk 通过打开shell/apk-custom-packages.sh的注释来集成
 if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
   CUSTOM_PACKAGES="$(tr '\n' ' ' < shell/custom25-packages.txt)"
+  # The 25.12.1 ImageBuilder leaks pkg_ver between FormatPackages iterations.
+  # Reset it per package so an exact frontend pin cannot constrain later packages.
+  if ! grep -Fq '$(eval pkg_ver:=)' Makefile; then
+    sed -i '/^  $(eval pkg_name:=/i\  $(eval pkg_ver:=)' Makefile
+  fi
+  # Keep the matching ImageBuilder configuration and repository versions.
+  sed -i 's/^CONFIG_TARGET_ROOTFS_EXT4FS=y/# CONFIG_TARGET_ROOTFS_EXT4FS is not set/' .config
 else
   source shell/apk-custom-packages.sh
 fi
@@ -23,11 +30,9 @@ pppoe_account=${PPPOE_ACCOUNT}
 pppoe_password=${PPPOE_PASSWORD}
 EOF
 
-echo "cat pppoe-settings"
-cat /home/build/immortalwrt/files/etc/config/pppoe-settings
-
 if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
   mkdir -p packages
+  find packages -maxdepth 1 -type f \( -name 'mosdns-*.apk' -o -name 'luci-app-mosdns-*.apk' -o -name 'luci-i18n-mosdns-zh-cn-*.apk' -o -name 'v2dat-*.apk' -o -name 'geo2txt-*.apk' -o -name 'luci-app-adguardhome-*.apk' -o -name 'luci-i18n-adguardhome-zh-cn-*.apk' -o -name 'luci-app-lucky-*.apk' -o -name 'luci-i18n-lucky-zh-cn-*.apk' -o -name 'lucky-*.apk' \) -delete
   cp /custom25-apks/*.apk packages/
 elif [ -z "$CUSTOM_PACKAGES" ]; then
   echo "⚪️ 未选择 任何第三方软件包"
@@ -133,14 +138,21 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Build completed successfully."
-
 if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
   manifest=bin/targets/x86/64/immortalwrt-25.12.1-x86-64-generic.manifest
   test -s "$manifest"
   while read -r package; do
+    package=${package%%=*}
     grep -q "^${package} - " "$manifest" || { echo "Missing requested package: $package"; exit 1; }
   done < shell/custom25-packages.txt
+  test -x files/usr/bin/lucky
+  grep -Fxq 'luci-app-adguardhome - 3.3.0-r1' "$manifest"
+  grep -Fxq 'luci-i18n-adguardhome-zh-cn - 3.3.0-r1' "$manifest"
+  grep -Fxq 'luci-app-lucky - 2.0.7-r1' "$manifest"
+  grep -Fxq 'luci-i18n-lucky-zh-cn - 2.0.7' "$manifest"
+  grep -Fxq 'mosdns - 5.3.4-r14' "$manifest"
+  grep -Fxq 'luci-app-mosdns - 1.7.14-r1' "$manifest"
+  grep -Fxq 'luci-i18n-mosdns-zh-cn - 26.255.53985~73981c0' "$manifest"
   if [ "$INCLUDE_DOCKER" = yes ]; then
     for package in dockerd luci-app-dockerman luci-i18n-dockerman-zh-cn; do
       grep -q "^${package} - " "$manifest" || exit 1
@@ -153,3 +165,5 @@ if [ "${CUSTOM25_PROFILE:-0}" = "1" ]; then
     echo "Refusing external kernel/BTF packages"; exit 1
   fi
 fi
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Build and package verification completed successfully."

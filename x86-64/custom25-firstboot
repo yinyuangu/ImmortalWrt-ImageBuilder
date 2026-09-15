@@ -1,20 +1,31 @@
 #!/bin/sh
 # Applied after the repository's standard network setup.
+# This profile keeps the requested management IP on single-port devices too.
+if [ -s /etc/config/custom_router_ip.txt ]; then
+    router_ip=$(cat /etc/config/custom_router_ip.txt)
+    uci set network.lan.proto='static'
+    uci set network.lan.ipaddr="$router_ip"
+    uci set network.lan.netmask='255.255.255.0'
+    uci commit network
+fi
+# Upstream Lucky's menu says Basic Settings, but its Chinese catalog has Settings.
+sed -i 's/"Basic Settings"/"Settings"/' /usr/share/luci/menu.d/luci-app-lucky.json
 uci set luci.main.lang='zh_cn'
 uci set luci.main.mediaurlbase='/luci-static/argon'
 uci -q set openclash.config.enable='0'
 uci -q set mosdns.config.enabled='0'
 uci -q set daed.config.enabled='0'
 uci -q set adguardhome.config.enabled='0'
+uci -q set lucky.lucky.installed_version='2.27.2'
 uci -q set turboacc.config.sw_flow='0'
 uci -q set turboacc.config.hw_flow='0'
 uci -q set turboacc.config.sfe_flow='0'
 uci -q set firewall.@defaults[0].flow_offloading='0'
 uci -q set firewall.@defaults[0].flow_offloading_hw='0'
-for config in luci openclash mosdns daed adguardhome turboacc firewall; do
+for config in luci openclash mosdns daed adguardhome lucky turboacc firewall; do
     uci commit "$config"
 done
-for service in openclash mosdns daed adguardhome; do
+for service in openclash mosdns daed adguardhome AdGuardHome; do
     /etc/init.d/"$service" disable
 done
 exit 0

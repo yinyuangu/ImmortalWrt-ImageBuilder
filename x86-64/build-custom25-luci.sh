@@ -21,16 +21,14 @@ git clone --depth 1 --branch luci https://github.com/chenmozhijin/turboacc.git t
 git -C turboacc-src fetch --depth 1 origin 530092c532839efb96e9f328d34dbf3adff4b557
 git -C turboacc-src checkout 530092c532839efb96e9f328d34dbf3adff4b557
 cp -a turboacc-src/luci-app-turboacc package/
-mkdir -p feeds/luci/applications/luci-app-adguardhome/po/zh_Hans
-cp "$ROOT/x86-64/adguardhome.zh_Hans.po" feeds/luci/applications/luci-app-adguardhome/po/zh_Hans/adguardhome.po
-# Clear SDK-wide package selections, then select only these LuCI builds.
-sed -i '/^CONFIG_PACKAGE_.*=[my]$/d' .config
-cat >> .config <<'EOF'
+# Upstream provides zh_Hans as a symlink to its legacy zh-cn directory.
+test -s package/luci-app-turboacc/po/zh_Hans/turboacc.po
+# SDK archives do not contain .config: generate only the requested selections.
+cat > .config <<'EOF'
 CONFIG_ALL=n
 CONFIG_ALL_KMODS=n
 CONFIG_ALL_NONSHARED=n
 CONFIG_LUCI_LANG_zh_Hans=y
-CONFIG_PACKAGE_luci-app-adguardhome=m
 CONFIG_PACKAGE_luci-app-turboacc=m
 CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y
 CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y
@@ -41,7 +39,5 @@ CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_DRV=n
 EOF
 make defconfig
 make package/luci-app-turboacc/compile V=s -j2
-make package/feeds/luci/luci-app-adguardhome/compile V=s -j2
-find bin/packages -type f \( -name 'luci-app-turboacc-*.apk' -o -name 'luci-i18n-turboacc-zh-cn-*.apk' -o -name 'luci-i18n-adguardhome-zh-cn-*.apk' \) -exec cp {} "$ROOT/custom25-apks/" \;
-test "$(find "$ROOT/custom25-apks" -name 'luci-i18n-adguardhome-zh-cn-*.apk' | wc -l)" -eq 1
+find bin/packages -type f \( -name 'luci-app-turboacc-*.apk' -o -name 'luci-i18n-turboacc-zh-cn-*.apk' \) -exec cp {} "$ROOT/custom25-apks/" \;
 test "$(find "$ROOT/custom25-apks" -name 'luci-i18n-turboacc-zh-cn-*.apk' | wc -l)" -eq 1
